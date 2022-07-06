@@ -209,6 +209,7 @@ def eval(model, dataloader, label_sents):
     return sim_tensor, f1, p, r
 
 def tsne(model, dataloader, label_sents):
+    way = len(label_sents)
     embedding_array = []
     label_array = []
     model.eval()
@@ -240,7 +241,7 @@ def tsne(model, dataloader, label_sents):
     X_embedded = tsne.fit_transform(embedding_array)
     palette = sns.color_palette("bright", len(np.unique(label_array)))
     sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=label_array, legend='full', palette=palette)
-    plt.savefig('tsne.png')
+    plt.savefig(f'tsne_{way}.png')
 
 
 def kmeans(model, dataloader, label_sents):
@@ -279,7 +280,7 @@ def kmeans(model, dataloader, label_sents):
     X_embedded = tsne.fit_transform(embedding_array)
     palette = sns.color_palette("bright", len(np.unique(label_array)))
     sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=y_kmeans, legend='full', palette=palette)
-    plt.savefig('tsne_kmeans.png')
+    plt.savefig(f'tsne_kmeans_{way}.png')
 
     pred_array = np.zeros_like(y_kmeans)
     for i in range(way):
