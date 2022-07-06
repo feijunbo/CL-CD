@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import BertConfig, BertModel, BertTokenizer
+import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 import seaborn as sns
 sns.set(rc={'figure.figsize':(11.7,8.27)})
@@ -233,6 +234,7 @@ def tsne(model, dataloader, label_sents):
     tsne = TSNE()
     X_embedded = tsne.fit_transform(embedding_array)
     sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=label_array, legend='full', palette=palette)
+    plt.savefig('tsne.png')
 
 def train(model, train_dl, test_dl, optimizer, label_sents):
     """模型训练函数 
@@ -363,6 +365,8 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(SAVE_PATH))
         sim_tensor, f1, p, r = eval(model, test_dataloader, label_sents)
         print(f'test_macroF1: {f1:.4f}, p: {p}, r: {r}')
+
+        tsne(model, test_dataloader, label_sents)
         # selected_sents, selected_labels = get_similar_sents(sim_tensor, test_sents, test_labels, 5)
         # pesudo_data = get_pesudo_data(selected_sents, label_sents)
         # pesudo_dataloader = DataLoader(TrainDataset(pesudo_data), batch_size=BATCH_SIZE)
