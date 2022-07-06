@@ -315,7 +315,7 @@ def train(model, train_dl, test_dl, optimizer, label_sents):
         loss.backward()
         optimizer.step()
         # 评估
-        if batch_idx % 200 == 0 or batch_idx == (len(train_dl) - 1):
+        if batch_idx % 200 == 0 or batch_idx == len(train_dl):
             print(f'loss: {loss.item():.4f}')
             _, f1, p, r = kmeans(model, test_dl, label_sents)
             model.train()
