@@ -14,8 +14,12 @@ from tqdm import tqdm
 from transformers import BertConfig, BertModel, BertTokenizer
 import os
 import json
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+import seaborn as sns
+sns.set(rc={'figure.figsize':(11.7,8.27)})
 from sklearn.cluster import KMeans
-
+from scipy.stats import mode
 # 基本参数
 EPOCHS = 1
 # SAMPLES = 10000
@@ -206,7 +210,6 @@ def simcse_unsup_loss(y_pred):
 #             label_array = np.append(label_array, np.array(label))        
 #     # corrcoef 
 #     return cluster_tensor, label_array
-
 def eval(model, dataloader, label_sents):
     """模型评估函数 
     批量预测, batch结果拼接, 一次性求spearman相关度
@@ -232,9 +235,62 @@ def eval(model, dataloader, label_sents):
             sim = F.cosine_similarity(source_pred, target_pred, dim=-1)
             sim_tensor = torch.cat((sim_tensor, sim), dim=0)            
             label_array = np.append(label_array, np.array(label))
+    model.train()
     pred_array = sim_tensor.argmax(-1).cpu().numpy()
-    f1score = f1_score(label_array, pred_array, average='macro')
-    return f1score
+    f1 = f1_score(label_array, pred_array, average='macro')
+    p = precision_score(label_array, pred_array, average='macro')
+    r = recall_score(label_array, pred_array, average='macro')
+    return sim_tensor, f1, p, r
+
+def kmeans(model, dataloader, label_sents):
+    way = len(label_sents)
+    embedding_array = []
+    label_array = []
+    model.eval()
+    target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
+    with torch.no_grad():
+        for source, label in tqdm(dataloader):
+            # source        [batch, 1, seq_len] -> [batch, seq_len]
+            source_input_ids = source.get('input_ids').squeeze(1).to(DEVICE)
+            source_attention_mask = source.get('attention_mask').squeeze(1).to(DEVICE)
+            source_token_type_ids = source.get('token_type_ids').squeeze(1).to(DEVICE)
+            source_pred = model(source_input_ids, source_attention_mask, source_token_type_ids)
+
+            embedding_array.append(source_pred.cpu().numpy())
+            label_array.append(np.array(label))
+
+        # target        [batch, 1, seq_len] -> [batch, seq_len]
+        # target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
+        # target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
+        # target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
+        # target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
+        # embedding_array.append(target_pred.cpu().numpy())
+        # label_array.append(np.arange(100, 100+len(label_sents)))
+
+        embedding_array = np.concatenate(embedding_array, 0)
+        label_array = np.concatenate(label_array, 0)
+
+    # model.train()
+    kmeans = KMeans(n_clusters=way)
+    kmeans.fit(embedding_array)
+    y_kmeans = kmeans.predict(embedding_array)
+    tsne = TSNE()
+    X_embedded = tsne.fit_transform(embedding_array)
+    palette = sns.color_palette("bright", len(np.unique(label_array)))
+    sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=y_kmeans, legend='full', palette=palette)
+    plt.savefig(f'tsne_kmeans_{way}.png')
+
+    pred_array = np.zeros_like(y_kmeans)
+    for i in range(way):
+        #得到聚类结果第i类的 True Flase 类型的index矩阵
+        mask = (y_kmeans == i)
+        #根据index矩阵，找出这些target中的众数，作为真实的label
+        pred_array[mask] = mode(label_array)[0]
+
+    f1 = f1_score(label_array, pred_array, average='macro')
+    p = precision_score(label_array, pred_array, average='macro')
+    r = recall_score(label_array, pred_array, average='macro')
+    return None, f1, p, r
 
 def train(model, train_dl, dev_dl, optimizer, label_sents) -> None:
     """模型训练函数"""
@@ -255,10 +311,10 @@ def train(model, train_dl, dev_dl, optimizer, label_sents) -> None:
         
         if (batch_idx+1) % 1 == 0:    
             print(f'loss: {loss.item():.4f}')
-            dev_macroF1 = eval(model, dev_dl, label_sents)
+            _, f1, p, r = kmeans(model, dev_dl, label_sents)
             model.train()
-            if best < dev_macroF1:
-                best = dev_macroF1
+            if best < f1:
+                best = f1
                 torch.save(model.state_dict(), UNSUP_SAVE_PATH)
                 print(f"higher corrcoef: {best:.4f} in batch: {batch_idx}, save model")
        
@@ -303,5 +359,8 @@ if __name__ == '__main__':
     # eval
     if args.do_predict:
         model.load_state_dict(torch.load(UNSUP_SAVE_PATH))
-        test_macroF1 = eval(model, test_dataloader, label_sents)
-        print(f'dev_macroF1: {test_macroF1:.4f}')
+        sim_tensor, f1, p, r = eval(model, test_dataloader, label_sents)
+        print(f'dev_macroF1: {f1:.4f}')
+
+        sim_tensor, f1, p, r  = kmeans(model, test_dataloader, label_sents)
+        print(f'kmeans test_macroF1: {f1:.4f}, p: {p}, r: {r}')

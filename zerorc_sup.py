@@ -292,7 +292,7 @@ def kmeans(model, dataloader, label_sents):
     f1 = f1_score(label_array, pred_array, average='macro')
     p = precision_score(label_array, pred_array, average='macro')
     r = recall_score(label_array, pred_array, average='macro')
-    return sim_tensor, f1, p, r
+    return None, f1, p, r
 
 def train(model, train_dl, test_dl, optimizer, label_sents):
     """模型训练函数 
@@ -315,7 +315,7 @@ def train(model, train_dl, test_dl, optimizer, label_sents):
         # 评估
         if batch_idx % 200 == 0:
             print(f'loss: {loss.item():.4f}')
-            _, f1, p, r = eval(model, test_dl, label_sents)
+            _, f1, p, r = kmeans(model, test_dl, label_sents)
             model.train()
             if best < f1:
                 early_stop_batch = 0
