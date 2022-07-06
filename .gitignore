@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+saved_model/*
+datasets/fewrel/train.txt
+datasets/fewrel/val.txt
+datasets/wikizsl/train.txt
+datasets/wikizsl/val.txt
+tsne*

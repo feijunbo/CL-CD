@@ -242,6 +242,7 @@ def tsne(model, dataloader, label_sents):
     palette = sns.color_palette("bright", len(np.unique(label_array)))
     sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=label_array, legend='full', palette=palette)
     plt.savefig(f'tsne_{way}.png')
+    plt.close()
 
 
 def kmeans(model, dataloader, label_sents):
@@ -281,13 +282,14 @@ def kmeans(model, dataloader, label_sents):
     palette = sns.color_palette("bright", len(np.unique(label_array)))
     sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=y_kmeans, legend='full', palette=palette)
     plt.savefig(f'tsne_kmeans_{way}.png')
+    plt.close()
 
     pred_array = np.zeros_like(y_kmeans)
     for i in range(way):
         #得到聚类结果第i类的 True Flase 类型的index矩阵
         mask = (y_kmeans == i)
         #根据index矩阵，找出这些target中的众数，作为真实的label
-        pred_array[mask] = mode(label_array)[0]
+        pred_array[mask] = mode(label_array[mask])[0]
 
     f1 = f1_score(label_array, pred_array, average='macro')
     p = precision_score(label_array, pred_array, average='macro')
