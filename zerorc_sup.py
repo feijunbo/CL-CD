@@ -367,6 +367,7 @@ if __name__ == '__main__':
         print(f'test_macroF1: {f1:.4f}, p: {p}, r: {r}')
 
         tsne(model, test_dataloader, label_sents)
+        
         # selected_sents, selected_labels = get_similar_sents(sim_tensor, test_sents, test_labels, 5)
         # pesudo_data = get_pesudo_data(selected_sents, label_sents)
         # pesudo_dataloader = DataLoader(TrainDataset(pesudo_data), batch_size=BATCH_SIZE)
