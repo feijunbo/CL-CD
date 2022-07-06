@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 import seaborn as sns
 sns.set(rc={'figure.figsize':(11.7,8.27)})
-palette = sns.color_palette("bright", 10)
 
 # 基本参数
 EPOCHS = 1
@@ -208,8 +207,8 @@ def eval(model, dataloader, label_sents):
     return sim_tensor, f1, p, r
 
 def tsne(model, dataloader, label_sents):
-    embedding_array = np.array([])
-    label_array = np.array([])
+    embedding_array = []
+    label_array = []
     target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
     with torch.no_grad():
         for source, label in tqdm(dataloader):
@@ -218,21 +217,25 @@ def tsne(model, dataloader, label_sents):
             source_attention_mask = source.get('attention_mask').squeeze(1).to(DEVICE)
             source_token_type_ids = source.get('token_type_ids').squeeze(1).to(DEVICE)
             source_pred = model(source_input_ids, source_attention_mask, source_token_type_ids)
-            source_pred = source_pred.unsqueeze(1)
 
-            embedding_array = np.append(embedding_array, source_pred.cpu().numpy())
-            label_array = np.append(label_array, np.array(label))
+            embedding_array.append(source_pred.cpu().numpy())
+            label_array.append(np.array(label))
 
         # target        [batch, 1, seq_len] -> [batch, seq_len]
         target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
         target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
         target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
         target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
-        embedding_array = np.append(embedding_array, target_pred.cpu().numpy())
-        label_array = np.append(label_array, np.arange(np.max(label_array), np.max(label_array)+len(label_sents)))
+        embedding_array.append(target_pred.cpu().numpy())
+        label_array.append(np.arange(100, 100+len(label_sents)))
+
+        embedding_array = np.concatenate(embedding_array, 0)
+        label_array = np.concatenate(label_array, 0)
+
     model.train()
     tsne = TSNE()
     X_embedded = tsne.fit_transform(embedding_array)
+    palette = sns.color_palette("bright", len(np.unique(label_array)))
     sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=label_array, legend='full', palette=palette)
     plt.savefig('tsne.png')
 
