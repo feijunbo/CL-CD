@@ -315,7 +315,7 @@ def train(model, train_dl, test_dl, optimizer, label_sents):
         loss.backward()
         optimizer.step()
         # 评估
-        if batch_idx % 200 == 0:
+        if batch_idx % 200 == 0 or batch_idx == (len(train_dl) - 1):
             print(f'loss: {loss.item():.4f}')
             _, f1, p, r = kmeans(model, test_dl, label_sents)
             model.train()
@@ -418,8 +418,6 @@ if __name__ == '__main__':
             print(f'epoch: {epoch}')
             train(model, train_dataloader, test_dataloader, optimizer, label_sents)
         print(f'train is finished, best model is saved at {SAVE_PATH}')
-        sim_tensor, f1, p, r = eval(model, test_dataloader, label_sents)
-        print(f'test_macroF1: {f1:.4f}, p: {p}, r: {r}')
     # eval
     if args.do_predict:
         model.load_state_dict(torch.load(SAVE_PATH))
