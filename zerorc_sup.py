@@ -240,7 +240,7 @@ def tsne(model, dataloader, label_sents):
     tsne = TSNE()
     X_embedded = tsne.fit_transform(embedding_array)
     palette = sns.color_palette("bright", len(np.unique(label_array)))
-    sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=label_array, legend='full', palette=palette)
+    sns.scatterplot(x=X_embedded[:,0], y=X_embedded[:,1], hue=label_array, legend='full', palette=palette)
     plt.savefig(f'tsne_{way}.png')
     plt.close()
 
@@ -280,7 +280,7 @@ def kmeans(model, dataloader, label_sents):
     tsne = TSNE()
     X_embedded = tsne.fit_transform(embedding_array)
     palette = sns.color_palette("bright", len(np.unique(label_array)))
-    sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=y_kmeans, legend='full', palette=palette)
+    sns.scatterplot(x=X_embedded[:,0], y=X_embedded[:,1], hue=y_kmeans, legend='full', palette=palette)
     plt.savefig(f'tsne_kmeans_{way}.png')
     plt.close()
 
@@ -291,9 +291,9 @@ def kmeans(model, dataloader, label_sents):
         #根据index矩阵，找出这些target中的众数，作为真实的label
         pred_array[mask] = mode(label_array[mask])[0]
 
-    f1 = f1_score(label_array, pred_array, average='macro')
-    p = precision_score(label_array, pred_array, average='macro')
-    r = recall_score(label_array, pred_array, average='macro')
+    f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
+    p = precision_score(label_array, pred_array, average='macro', zero_division=0)
+    r = recall_score(label_array, pred_array, average='macro', zero_division=0)
     return None, f1, p, r
 
 def train(model, train_dl, test_dl, optimizer, label_sents):
