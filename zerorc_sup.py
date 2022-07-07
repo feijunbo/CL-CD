@@ -205,9 +205,9 @@ def eval(model, dataloader, label_sents):
             label_array = np.append(label_array, np.array(label))
 
     pred_array = sim_array.argmax(-1).cpu().numpy()
-    f1 = f1_score(label_array, pred_array, average='macro', average='macro', zero_division=0)
-    p = precision_score(label_array, pred_array, average='macro', average='macro', zero_division=0)
-    r = recall_score(label_array, pred_array, average='macro', average='macro', zero_division=0)
+    f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
+    p = precision_score(label_array, pred_array, average='macro', zero_division=0)
+    r = recall_score(label_array, pred_array, average='macro', zero_division=0)
     return sim_array.cpu().numpy(), f1, p, r
 
 def tsne(model, dataloader, label_sents):
@@ -324,16 +324,26 @@ def get_kmeans_sim(model, dataloader, label_sents):
     kmeans = KMeans(n_clusters=way)
     results = kmeans.fit(embedding_array)
     for embedding in embedding_array:
-        sim_array.append(cosine_similarity(embedding, results.cluster_centers_))
+        sim_array.append(cosine_similarity([embedding], results.cluster_centers_))
     sim_array = np.concatenate(sim_array, 0)
 
+    temp_pred_array = sim_array.argmax(-1)
+    temp_sim_array = np.zeros_like(sim_array)
+    for i in range(way):
+        #得到聚类结果第i类的 True Flase 类型的index矩阵
+        mask = (temp_pred_array == i)
+        #根据index矩阵，找出这些target中的众数，作为真实的label
+        temp_sim_array[:,mode(label_array[mask])[0].item()] = sim_array[:,i]
+
+    sim_array = temp_sim_array
     pred_array = sim_array.argmax(-1)
-    f1 = f1_score(label_array, pred_array, average='macro', average='macro', zero_division=0)
-    p = precision_score(label_array, pred_array, average='macro', average='macro', zero_division=0)
-    r = recall_score(label_array, pred_array, average='macro', average='macro', zero_division=0)
+
+    f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
+    p = precision_score(label_array, pred_array, average='macro', zero_division=0)
+    r = recall_score(label_array, pred_array, average='macro', zero_division=0)
     return sim_array, f1, p, r
 
-def train(model, train_dl, test_dl, optimizer, label_sents):
+def train(model, train_dl, test_dl, optimizer, label_sents, save=True):
     """模型训练函数 
     """
     model.train()
@@ -359,7 +369,8 @@ def train(model, train_dl, test_dl, optimizer, label_sents):
             if best < f1:
                 early_stop_batch = 0
                 best = f1
-                torch.save(model.state_dict(), SAVE_PATH)
+                if save:
+                    torch.save(model.state_dict(), SAVE_PATH)
                 print(f"higher macroF1: {best:.4f} in batch: {batch_idx}, save model")
                 continue
             else:
@@ -373,14 +384,14 @@ def train(model, train_dl, test_dl, optimizer, label_sents):
 def get_similar_sents(sim_array, test_sents, test_labels, topk):
     way = sim_array.shape[1]
 
-    pred_array = sim_array
+    pred_array = sim_array.argmax(-1)
     
     selected_sents = {}
     selected_labels = []
     selected_preds = []
     for i in range(way):
         tmp_index = np.where(pred_array == i)[0]
-        temp_tensor = sim_array[:,i][pred_array == i].cpu().numpy()
+        temp_tensor = sim_array[:,i][pred_array == i]
         sorted_index = np.argsort(-temp_tensor)
         sorted_index = tmp_index[sorted_index]
         selected_sents[i] = []
@@ -389,7 +400,7 @@ def get_similar_sents(sim_array, test_sents, test_labels, topk):
             selected_sents[i].append(test_sents[sorted_index[j]])
             selected_labels.append(test_labels[sorted_index[j]])
             selected_preds.append(pred_array[sorted_index[j]])
-    f1score = f1_score(selected_labels[i], selected_preds[i], average='macro', zero_division=0)
+    f1score = f1_score(selected_labels, selected_preds, average='macro', zero_division=0)
     print(f"top {topk}", f"f1 {f1score}")
     return selected_sents, selected_labels
 
@@ -398,16 +409,18 @@ def get_intersection(a_selected_sents, a_selected_labels, b_selected_sents, b_se
     selected_labels = []
     selected_preds = []
 
-    for k, a_v in a_selected_sents:
-        selected_sents[i] = []
-        a_l = a_selected_labels[k]
+    index = 0
+    for k, a_v in a_selected_sents.items():
+        selected_sents[k] = []
         b_v = b_selected_sents[k]
         for i, v in enumerate(a_v):
-            if v in b_v:
-                selected_sents[i].append(v)
-                selected_labels.append(a_l)
+            if (v in b_v and a_selected_labels[index+i] == b_selected_labels[index+i]) or (i < 30):
+                selected_sents[k].append(v)
+                selected_labels.append(a_selected_labels[index+i])
                 selected_preds.append(k)
-    f1score = f1_score(selected_labels[i], selected_preds[i], average='macro', zero_division=0)
+        index += len(a_selected_sents[k])
+        print('type', k, 'num', len(selected_sents[k]))
+    f1score = f1_score(selected_labels, selected_preds, average='macro', zero_division=0)
     print(f"num {len(selected_labels)}", f"f1 {f1score}")
     return selected_sents, selected_labels
 
@@ -428,9 +441,9 @@ def get_pesudo_data(selected_sents, label_sents):
 def fusion_similarity(a_sim, b_sim, label_array):
     sim_array = (a_sim + b_sim) / 2
     pred_array = sim_array.argmax(-1)
-    f1 = f1_score(label_array, pred_array, average='macro', average='macro', zero_division=0)
-    p = precision_score(label_array, pred_array, average='macro', average='macro', zero_division=0)
-    r = recall_score(label_array, pred_array, average='macro', average='macro', zero_division=0)
+    f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
+    p = precision_score(label_array, pred_array, average='macro', zero_division=0)
+    r = recall_score(label_array, pred_array, average='macro', zero_division=0)
 
     return sim_array, f1, p, r
 
@@ -495,15 +508,19 @@ if __name__ == '__main__':
         fusion_sim_array, f1, p, r = fusion_similarity(label_sim_array, kmeans_sim_array, test_labels)
         print(f'fusion test_macroF1: {f1:.4f}, p: {p}, r: {r}')
 
+        print(label_sim_array.shape)
+        print('get similar sentences by label:')
         label_selected_sents, label_selected_labels = get_similar_sents(label_sim_array, test_sents, test_labels, 100)
+        print('get similar sentences by kmeans:')
         kmeans_selected_sents, kmeans_selected_labels = get_similar_sents(kmeans_sim_array, test_sents, test_labels, 100)
-        selected_sents, selected_labels = get_intersection(label_selected_sents, label_selected_labels, kmeans_selected_sents, kmeans_selected_labels)
+        print('get intersection sentences:')
+        selected_sents, selected_labels = get_intersection(kmeans_selected_sents, kmeans_selected_labels, label_selected_sents, label_selected_labels)
         pesudo_data = get_pesudo_data(selected_sents, label_sents)
         pesudo_dataloader = DataLoader(TrainDataset(pesudo_data), batch_size=BATCH_SIZE)
         best = 0
         for epoch in range(EPOCHS):
             print(f'epoch: {epoch}')
-            train(model, pesudo_dataloader, test_dataloader, optimizer, label_sents)
+            train(model, pesudo_dataloader, test_dataloader, optimizer, label_sents, False)
         print(f'train is finished, best model is saved at {SAVE_PATH}')
         pesudo_sim_array, f1, p, r = eval(model, test_dataloader, label_sents)
         print(f'test_macroF1: {f1:.4f}, p: {p}, r: {r}')
