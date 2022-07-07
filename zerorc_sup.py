@@ -23,7 +23,7 @@ from sklearn.cluster import KMeans
 from scipy.stats import mode
 
 # 基本参数
-EPOCHS = 2
+EPOCHS = 1
 # SAMPLES = 10000
 BATCH_SIZE = 32
 LR = 1e-5
@@ -395,6 +395,8 @@ def get_similar_sents(sim_array, test_sents, test_labels, topk):
         sorted_index = np.argsort(-temp_tensor)
         sorted_index = tmp_index[sorted_index]
         selected_sents[i] = []
+        if len(temp_tensor) == 0:
+            continue
         # print(sim_tensor[:,i][sorted_index])
         for j in range(topk):
             selected_sents[i].append(test_sents[sorted_index[j]])
@@ -427,11 +429,15 @@ def get_intersection(a_selected_sents, a_selected_labels, b_selected_sents, b_se
 def get_pesudo_data(selected_sents, label_sents):
     pesudo_data = []
     for i, label_sent in enumerate(label_sents):
+        if len(selected_sents[i]) == 0:
+            continue
         for _ in range(50):
             sent1, sent_e1 = np.random.choice(selected_sents[i], 2, replace=False)
             sent_e2 = label_sent
-            cont_keys = np.random.choice(list(set(range(len(label_sents))) - set([i])), 1, replace=False)
+            cont_keys = np.random.choice(list(set(range(len(label_sents))) - set([i])), 3, replace=False)
             for cont_key in cont_keys:
+                if len(selected_sents[cont_key]) == 0:
+                    continue
                 snet_c1 = np.random.choice(selected_sents[cont_key], 1, replace=False)[0]
                 snet_c2 = label_sents[cont_key]
                 pesudo_data.append([sent1, sent_e1, snet_c1])
@@ -505,25 +511,25 @@ if __name__ == '__main__':
         print(f'kmeans similarity test_macroF1: {f1:.4f}, p: {p}, r: {r}')
         # tsne(model, test_dataloader, label_sents)
 
-        fusion_sim_array, f1, p, r = fusion_similarity(label_sim_array, kmeans_sim_array, test_labels)
-        print(f'fusion test_macroF1: {f1:.4f}, p: {p}, r: {r}')
+        # fusion_sim_array, f1, p, r = fusion_similarity(label_sim_array, kmeans_sim_array, test_labels)
+        # print(f'fusion test_macroF1: {f1:.4f}, p: {p}, r: {r}')
 
-        print(label_sim_array.shape)
-        print('get similar sentences by label:')
-        label_selected_sents, label_selected_labels = get_similar_sents(label_sim_array, test_sents, test_labels, 100)
-        print('get similar sentences by kmeans:')
-        kmeans_selected_sents, kmeans_selected_labels = get_similar_sents(kmeans_sim_array, test_sents, test_labels, 100)
-        print('get intersection sentences:')
-        selected_sents, selected_labels = get_intersection(kmeans_selected_sents, kmeans_selected_labels, label_selected_sents, label_selected_labels)
-        pesudo_data = get_pesudo_data(selected_sents, label_sents)
-        pesudo_dataloader = DataLoader(TrainDataset(pesudo_data), batch_size=BATCH_SIZE)
-        best = 0
-        for epoch in range(EPOCHS):
-            print(f'epoch: {epoch}')
-            train(model, pesudo_dataloader, test_dataloader, optimizer, label_sents, False)
-        print(f'train is finished, best model is saved at {SAVE_PATH}')
-        pesudo_sim_array, f1, p, r = eval(model, test_dataloader, label_sents)
-        print(f'test_macroF1: {f1:.4f}, p: {p}, r: {r}')
+        # print(label_sim_array.shape)
+        # print('get similar sentences by label:')
+        # label_selected_sents, label_selected_labels = get_similar_sents(label_sim_array, test_sents, test_labels, 100)
+        # print('get similar sentences by kmeans:')
+        # kmeans_selected_sents, kmeans_selected_labels = get_similar_sents(kmeans_sim_array, test_sents, test_labels, 100)
+        # print('get intersection sentences:')
+        # selected_sents, selected_labels = get_intersection(kmeans_selected_sents, kmeans_selected_labels, label_selected_sents, label_selected_labels)
+        # pesudo_data = get_pesudo_data(selected_sents, label_sents)
+        # pesudo_dataloader = DataLoader(TrainDataset(pesudo_data), batch_size=BATCH_SIZE)
+        # best = 0
+        # for epoch in range(EPOCHS):
+        #     print(f'epoch: {epoch}')
+        #     train(model, pesudo_dataloader, test_dataloader, optimizer, label_sents, False)
+        # print(f'train is finished, best model is saved at {SAVE_PATH}')
+        # pesudo_sim_array, f1, p, r = eval(model, test_dataloader, label_sents)
+        # print(f'test_macroF1: {f1:.4f}, p: {p}, r: {r}')
 
-        _, f1, p, r  = kmeans(model, test_dataloader, label_sents)
-        print(f'kmeans test_macroF1: {f1:.4f}, p: {p}, r: {r}')
+        # _, f1, p, r  = kmeans(model, test_dataloader, label_sents)
+        # print(f'kmeans test_macroF1: {f1:.4f}, p: {p}, r: {r}')
