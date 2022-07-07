@@ -519,7 +519,7 @@ if __name__ == '__main__':
         # print(label_sim_array.shape)
         # print('get similar sentences by label:')
         # label_selected_sents, label_selected_labels = get_similar_sents(label_sim_array, test_sents, test_labels, 100)
-        for i in range(6):
+        for i in range(1):
             print('get similar sentences by kmeans:')
             kmeans_selected_sents, kmeans_selected_labels = get_similar_sents(kmeans_sim_array, test_sents, test_labels, 100 + i*100)
             # print('get intersection sentences:')
