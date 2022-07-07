@@ -21,7 +21,7 @@ from sklearn.cluster import KMeans
 from scipy.stats import mode
 
 # 基本参数
-EPOCHS = 1
+EPOCHS = 2
 # SAMPLES = 10000
 BATCH_SIZE = 32
 LR = 1e-5
@@ -317,7 +317,7 @@ def train(model, train_dl, test_dl, optimizer, label_sents):
         # 评估
         if batch_idx % 200 == 0 or batch_idx == len(train_dl):
             print(f'loss: {loss.item():.4f}')
-            _, f1, p, r = kmeans(model, test_dl, label_sents)
+            _, f1, p, r = eval(model, test_dl, label_sents)
             model.train()
             if best < f1:
                 early_stop_batch = 0
