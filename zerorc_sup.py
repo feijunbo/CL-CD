@@ -7,6 +7,7 @@ from typing import List
 import os
 import numpy as np
 from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
+from sklearn.metrics.pairwise import cosine_similarity
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -201,7 +202,7 @@ def eval(model, dataloader, label_sents):
             sim = F.cosine_similarity(source_pred, target_pred, dim=-1)
             sim_tensor = torch.cat((sim_tensor, sim), dim=0)            
             label_array = np.append(label_array, np.array(label))
-    model.train()
+
     pred_array = sim_tensor.argmax(-1).cpu().numpy()
     f1 = f1_score(label_array, pred_array, average='macro')
     p = precision_score(label_array, pred_array, average='macro')
@@ -250,7 +251,7 @@ def kmeans(model, dataloader, label_sents):
     embedding_array = []
     label_array = []
     model.eval()
-    target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
+    # target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
     with torch.no_grad():
         for source, label in tqdm(dataloader):
             # source        [batch, 1, seq_len] -> [batch, seq_len]
@@ -295,6 +296,37 @@ def kmeans(model, dataloader, label_sents):
     p = precision_score(label_array, pred_array, average='macro')
     r = recall_score(label_array, pred_array, average='macro')
     return None, f1, p, r
+
+def get_kmeans_sim(model, dataloader, label_sents):
+    way = len(label_sents)
+
+    sim_array = []
+    embedding_array = []
+    label_array = []
+    model.eval()
+
+    with torch.no_grad():
+        for source, label in tqdm(dataloader):
+            # source        [batch, 1, seq_len] -> [batch, seq_len]
+            source_input_ids = source.get('input_ids').squeeze(1).to(DEVICE)
+            source_attention_mask = source.get('attention_mask').squeeze(1).to(DEVICE)
+            source_token_type_ids = source.get('token_type_ids').squeeze(1).to(DEVICE)
+            source_pred = model(source_input_ids, source_attention_mask, source_token_type_ids)
+            
+            embedding_array.append(source_pred.cpu().numpy())
+            label_array.append(np.array(label))
+
+        embedding_array = np.concatenate(embedding_array, 0)
+        label_array = np.concatenate(label_array, 0)
+
+
+    kmeans = KMeans(n_clusters=way)
+    results = kmeans.fit(embedding_array)
+    for embedding in embedding_array:
+        sim_array.append(cosine_similarity(embedding, results.cluster_centers_))
+    sim_array = np.concatenate(sim_array, 0)
+
+    return sim_array
 
 def train(model, train_dl, test_dl, optimizer, label_sents):
     """模型训练函数 
@@ -426,7 +458,7 @@ if __name__ == '__main__':
         sim_tensor, f1, p, r = eval(model, test_dataloader, label_sents)
         print(f'test_macroF1: {f1:.4f}, p: {p}, r: {r}')
 
-        sim_tensor, f1, p, r  = kmeans(model, test_dataloader, label_sents)
+        _, f1, p, r  = kmeans(model, test_dataloader, label_sents)
         print(f'kmeans test_macroF1: {f1:.4f}, p: {p}, r: {r}')
 
         tsne(model, test_dataloader, label_sents)
