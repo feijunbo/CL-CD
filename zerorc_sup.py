@@ -22,7 +22,7 @@ from sklearn.cluster import KMeans
 from scipy.stats import mode
 
 # 基本参数
-EPOCHS = 1
+EPOCHS = 2
 # SAMPLES = 10000
 BATCH_SIZE = 32
 LR = 1e-5
@@ -241,7 +241,7 @@ def tsne(model, dataloader, label_sents):
     tsne = TSNE()
     X_embedded = tsne.fit_transform(embedding_array)
     palette = sns.color_palette("bright", len(np.unique(label_array)))
-    sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=label_array, legend='full', palette=palette)
+    sns.scatterplot(x=X_embedded[:,0], y=X_embedded[:,1], hue=label_array, legend='full', palette=palette)
     plt.savefig(f'tsne_{way}.png')
     plt.close()
 
@@ -281,7 +281,7 @@ def kmeans(model, dataloader, label_sents):
     tsne = TSNE()
     X_embedded = tsne.fit_transform(embedding_array)
     palette = sns.color_palette("bright", len(np.unique(label_array)))
-    sns.scatterplot(X_embedded[:,0], X_embedded[:,1], hue=y_kmeans, legend='full', palette=palette)
+    sns.scatterplot(x=X_embedded[:,0], y=X_embedded[:,1], hue=y_kmeans, legend='full', palette=palette)
     plt.savefig(f'tsne_kmeans_{way}.png')
     plt.close()
 
@@ -292,9 +292,9 @@ def kmeans(model, dataloader, label_sents):
         #根据index矩阵，找出这些target中的众数，作为真实的label
         pred_array[mask] = mode(label_array[mask])[0]
 
-    f1 = f1_score(label_array, pred_array, average='macro')
-    p = precision_score(label_array, pred_array, average='macro')
-    r = recall_score(label_array, pred_array, average='macro')
+    f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
+    p = precision_score(label_array, pred_array, average='macro', zero_division=0)
+    r = recall_score(label_array, pred_array, average='macro', zero_division=0)
     return None, f1, p, r
 
 def get_kmeans_sim(model, dataloader, label_sents):
@@ -347,9 +347,9 @@ def train(model, train_dl, test_dl, optimizer, label_sents):
         loss.backward()
         optimizer.step()
         # 评估
-        if batch_idx % 200 == 0:
+        if batch_idx % 200 == 0 or batch_idx == len(train_dl):
             print(f'loss: {loss.item():.4f}')
-            _, f1, p, r = kmeans(model, test_dl, label_sents)
+            _, f1, p, r = eval(model, test_dl, label_sents)
             model.train()
             if best < f1:
                 early_stop_batch = 0
@@ -450,8 +450,6 @@ if __name__ == '__main__':
             print(f'epoch: {epoch}')
             train(model, train_dataloader, test_dataloader, optimizer, label_sents)
         print(f'train is finished, best model is saved at {SAVE_PATH}')
-        sim_tensor, f1, p, r = eval(model, test_dataloader, label_sents)
-        print(f'test_macroF1: {f1:.4f}, p: {p}, r: {r}')
     # eval
     if args.do_predict:
         model.load_state_dict(torch.load(SAVE_PATH))

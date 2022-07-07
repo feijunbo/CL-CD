@@ -76,9 +76,9 @@ def load_data(path):
     if os.path.exists(path):
         json_data = json.load(open(path))
         for key in json_data:
-            # for item in json_data[key]:
-            #     sent = cvt_data(item['tokens'], item['h'][2][0], item['t'][2][0])
-            #     sents.append(sent)
+            for item in json_data[key]:
+                sent = cvt_data(item['tokens'], item['h'][2][0], item['t'][2][0])
+                sents.append(sent)
             if os.path.exists(FEWREL_LABEL):
                 pid2name = json.load(open(FEWREL_LABEL))
                 # print(','.join(pid2name[key]))
@@ -309,7 +309,7 @@ def train(model, train_dl, dev_dl, optimizer, label_sents) -> None:
         loss.backward()
         optimizer.step()
         
-        if (batch_idx+1) % 1 == 0:    
+        if (batch_idx) % 100 == 0 or batch_idx == len(train_dl):    
             print(f'loss: {loss.item():.4f}')
             _, f1, p, r = kmeans(model, dev_dl, label_sents)
             model.train()
@@ -337,7 +337,7 @@ if __name__ == '__main__':
     tokenizer = BertTokenizer.from_pretrained(model_path)
     
     # load data
-    train_data = load_data(FEWREL_VAL)
+    train_data = load_data(FEWREL_TRAIN)
     train_dataloader = DataLoader(TrainDataset(train_data), batch_size=BATCH_SIZE)
     sents, labels, label_sents = load_test(FEWREL_VAL)
     test_dataset = TestDataset(sents, labels)
