@@ -252,7 +252,7 @@ def kmeans(model, dataloader, label_sents):
     embedding_array = []
     label_array = []
     model.eval()
-    # target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
+    target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
     with torch.no_grad():
         for source, label in tqdm(dataloader):
             # source        [batch, 1, seq_len] -> [batch, seq_len]
@@ -265,10 +265,10 @@ def kmeans(model, dataloader, label_sents):
             label_array.append(np.array(label))
 
         # target        [batch, 1, seq_len] -> [batch, seq_len]
-        # target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
-        # target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
-        # target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
-        # target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
+        target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
+        target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
+        target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
+        target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
         # embedding_array.append(target_pred.cpu().numpy())
         # label_array.append(np.arange(100, 100+len(label_sents)))
 
@@ -277,7 +277,7 @@ def kmeans(model, dataloader, label_sents):
 
     # model.train()
     kmeans = KMeans(n_clusters=way)
-    kmeans.fit(embedding_array)
+    results = kmeans.fit(embedding_array)
     y_kmeans = kmeans.predict(embedding_array)
     tsne = TSNE()
     X_embedded = tsne.fit_transform(embedding_array)
@@ -286,17 +286,29 @@ def kmeans(model, dataloader, label_sents):
     plt.savefig(f'tsne_kmeans_{way}.png')
     plt.close()
 
+    get_cluster_label(results.cluster_centers_, target_pred.cpu().numpy())
+
     pred_array = np.zeros_like(y_kmeans)
+    cvt_label = []
     for i in range(way):
         #得到聚类结果第i类的 True Flase 类型的index矩阵
         mask = (y_kmeans == i)
         #根据index矩阵，找出这些target中的众数，作为真实的label
         pred_array[mask] = mode(label_array[mask])[0]
+        cvt_label.append(mode(label_array[mask])[0].item())
+    print('cvt_label:', cvt_label)
 
     f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
     p = precision_score(label_array, pred_array, average='macro', zero_division=0)
     r = recall_score(label_array, pred_array, average='macro', zero_division=0)
     return None, f1, p, r
+
+def get_cluster_label(cluster_centers, target_pred):
+    sim_array = cosine_similarity(cluster_centers, target_pred)
+    pred_array = sim_array.argmax(-1)
+
+    print('cluster_label:', pred_array.tolist())
+    return pred_array.tolist()
 
 def get_kmeans_sim(model, dataloader, label_sents):
     way = len(label_sents)
@@ -329,6 +341,7 @@ def get_kmeans_sim(model, dataloader, label_sents):
 
     temp_pred_array = sim_array.argmax(-1)
     temp_sim_array = np.zeros_like(sim_array)
+    
     for i in range(way):
         #得到聚类结果第i类的 True Flase 类型的index矩阵
         mask = (temp_pred_array == i)
@@ -337,7 +350,7 @@ def get_kmeans_sim(model, dataloader, label_sents):
 
     sim_array = temp_sim_array
     pred_array = sim_array.argmax(-1)
-
+    
     f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
     p = precision_score(label_array, pred_array, average='macro', zero_division=0)
     r = recall_score(label_array, pred_array, average='macro', zero_division=0)
