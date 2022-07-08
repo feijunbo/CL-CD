@@ -133,3 +133,4 @@ datasets/fewrel/val.txt
 datasets/wikizsl/train.txt
 datasets/wikizsl/val.txt
 tsne*
+nohup.out
