@@ -292,12 +292,12 @@ def kmeans(model, dataloader, label_sents):
     plt.savefig(f'tsne_kmeans_{way}.png')
     plt.close()
 
-    topk_source_preds = get_similar_sents(sim, source_pred_array, label_array, REFERENCE_NUM)
+    topk_source_preds, _ = get_similar_sents(sim.cpu().numpy(), source_pred_array, label_array, REFERENCE_NUM)
     reference_array = []
     for k in topk_source_preds:
         reference_array.append(target_pred[k])
         reference_array.extend(topk_source_preds[k])
-    reference_array = torch.cat(reference_array, 0)
+    reference_array = torch.stack(reference_array, 0)
     cluster_labels = get_cluster_labels(results.cluster_centers_, reference_array.cpu().numpy())
 
     pred_array = np.zeros_like(y_kmeans)
@@ -316,7 +316,7 @@ def kmeans(model, dataloader, label_sents):
 
 def get_cluster_labels(cluster_centers, target_pred):
     sim_array = cosine_similarity(cluster_centers, target_pred)
-    sim_array = sim_array.view(len(cluster_centers), REFERENCE_NUM + 1, -1).mean(1)
+    sim_array = sim_array.reshape(len(cluster_centers), -1, REFERENCE_NUM + 1).mean(-1)
     pred_array = sim_array.argmax(-1)
 
     print('cluster_label:', pred_array.tolist())
@@ -362,12 +362,12 @@ def get_kmeans_sim(model, dataloader, label_sents):
         sim_array.append(cosine_similarity([embedding], results.cluster_centers_))
     sim_array = np.concatenate(sim_array, 0)
 
-    topk_source_preds = get_similar_sents(sim, source_pred_array, label_array, REFERENCE_NUM)
+    topk_source_preds, _ = get_similar_sents(sim.cpu().numpy(), source_pred_array, label_array, REFERENCE_NUM)
     reference_array = []
     for k in topk_source_preds:
         reference_array.append(target_pred[k])
         reference_array.extend(topk_source_preds[k])
-    reference_array = torch.cat(reference_array, 0)
+    reference_array = torch.stack(reference_array, 0)
     cluster_labels = get_cluster_labels(results.cluster_centers_, reference_array.cpu().numpy())
 
     temp_sim_array = np.zeros_like(sim_array)
