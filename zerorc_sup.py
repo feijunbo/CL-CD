@@ -31,6 +31,7 @@ DROPOUT = 0.3
 MAXLEN = 128
 POOLING = 'cls'   # choose in ['cls', 'pooler', 'first-last-avg', 'last-avg']
 DEVICE = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu') 
+REFERENCE_NUM = 10
 
 # 预训练模型目录
 BERT = '/home/feijunbo/bert-base-uncased'
@@ -187,6 +188,11 @@ def eval(model, dataloader, label_sents):
     label_array = np.array([])
     target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
     with torch.no_grad():
+        # target        [batch, 1, seq_len] -> [batch, seq_len]
+        target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
+        target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
+        target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
+        target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
         for source, label in tqdm(dataloader):
             # source        [batch, 1, seq_len] -> [batch, seq_len]
             source_input_ids = source.get('input_ids').squeeze(1).to(DEVICE)
@@ -194,11 +200,7 @@ def eval(model, dataloader, label_sents):
             source_token_type_ids = source.get('token_type_ids').squeeze(1).to(DEVICE)
             source_pred = model(source_input_ids, source_attention_mask, source_token_type_ids)
             source_pred = source_pred.unsqueeze(1)
-            # target        [batch, 1, seq_len] -> [batch, seq_len]
-            target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
-            target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
-            target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
-            target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
+
             # concat
             sim = F.cosine_similarity(source_pred, target_pred, dim=-1)
             sim_array = torch.cat((sim_array, sim), dim=0)            
@@ -249,11 +251,18 @@ def tsne(model, dataloader, label_sents):
 
 def kmeans(model, dataloader, label_sents):
     way = len(label_sents)
+    source_pred_array = []
     embedding_array = []
     label_array = []
     model.eval()
     target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
     with torch.no_grad():
+        # target        [batch, 1, seq_len] -> [batch, seq_len]
+        target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
+        target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
+        target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
+        target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
+
         for source, label in tqdm(dataloader):
             # source        [batch, 1, seq_len] -> [batch, seq_len]
             source_input_ids = source.get('input_ids').squeeze(1).to(DEVICE)
@@ -264,13 +273,10 @@ def kmeans(model, dataloader, label_sents):
             embedding_array.append(source_pred.cpu().numpy())
             label_array.append(np.array(label))
 
-        # target        [batch, 1, seq_len] -> [batch, seq_len]
-        target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
-        target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
-        target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
-        target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
-        # embedding_array.append(target_pred.cpu().numpy())
-        # label_array.append(np.arange(100, 100+len(label_sents)))
+            source_pred_array.append(source_pred)
+        
+        source_pred_array = torch.cat(source_pred_array, 0)
+        sim = F.cosine_similarity(source_pred_array.unsqueeze(1), target_pred, dim=-1)
 
         embedding_array = np.concatenate(embedding_array, 0)
         label_array = np.concatenate(label_array, 0)
@@ -286,15 +292,20 @@ def kmeans(model, dataloader, label_sents):
     plt.savefig(f'tsne_kmeans_{way}.png')
     plt.close()
 
-    get_cluster_label(results.cluster_centers_, target_pred.cpu().numpy())
+    topk_source_preds = get_similar_sents(sim, source_pred_array, label_array, REFERENCE_NUM)
+    reference_array = []
+    for k in topk_source_preds:
+        reference_array.append(target_pred[k])
+        reference_array.extend(topk_source_preds[k])
+    reference_array = torch.cat(reference_array, 0)
+    cluster_labels = get_cluster_labels(results.cluster_centers_, reference_array.cpu().numpy())
 
     pred_array = np.zeros_like(y_kmeans)
     cvt_label = []
     for i in range(way):
-        #得到聚类结果第i类的 True Flase 类型的index矩阵
         mask = (y_kmeans == i)
-        #根据index矩阵，找出这些target中的众数，作为真实的label
-        pred_array[mask] = mode(label_array[mask])[0]
+        # pred_array[mask] = mode(label_array[mask])[0]
+        pred_array[mask] = cluster_labels[i]
         cvt_label.append(mode(label_array[mask])[0].item())
     print('cvt_label:', cvt_label)
 
@@ -303,8 +314,9 @@ def kmeans(model, dataloader, label_sents):
     r = recall_score(label_array, pred_array, average='macro', zero_division=0)
     return None, f1, p, r
 
-def get_cluster_label(cluster_centers, target_pred):
+def get_cluster_labels(cluster_centers, target_pred):
     sim_array = cosine_similarity(cluster_centers, target_pred)
+    sim_array = sim_array.view(len(cluster_centers), REFERENCE_NUM + 1, -1).mean(1)
     pred_array = sim_array.argmax(-1)
 
     print('cluster_label:', pred_array.tolist())
@@ -312,13 +324,19 @@ def get_cluster_label(cluster_centers, target_pred):
 
 def get_kmeans_sim(model, dataloader, label_sents):
     way = len(label_sents)
-
+    source_pred_array = []
     sim_array = []
     embedding_array = []
     label_array = []
     model.eval()
-
+    target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
     with torch.no_grad():
+        # target        [batch, 1, seq_len] -> [batch, seq_len]
+        target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
+        target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
+        target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
+        target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
+
         for source, label in tqdm(dataloader):
             # source        [batch, 1, seq_len] -> [batch, seq_len]
             source_input_ids = source.get('input_ids').squeeze(1).to(DEVICE)
@@ -328,6 +346,11 @@ def get_kmeans_sim(model, dataloader, label_sents):
             
             embedding_array.append(source_pred.cpu().numpy())
             label_array.append(np.array(label))
+
+            source_pred_array.append(source_pred)
+        
+        source_pred_array = torch.cat(source_pred_array, 0)
+        sim = F.cosine_similarity(source_pred_array.unsqueeze(1), target_pred, dim=-1)
 
         embedding_array = np.concatenate(embedding_array, 0)
         label_array = np.concatenate(label_array, 0)
@@ -339,14 +362,18 @@ def get_kmeans_sim(model, dataloader, label_sents):
         sim_array.append(cosine_similarity([embedding], results.cluster_centers_))
     sim_array = np.concatenate(sim_array, 0)
 
-    temp_pred_array = sim_array.argmax(-1)
+    topk_source_preds = get_similar_sents(sim, source_pred_array, label_array, REFERENCE_NUM)
+    reference_array = []
+    for k in topk_source_preds:
+        reference_array.append(target_pred[k])
+        reference_array.extend(topk_source_preds[k])
+    reference_array = torch.cat(reference_array, 0)
+    cluster_labels = get_cluster_labels(results.cluster_centers_, reference_array.cpu().numpy())
+
     temp_sim_array = np.zeros_like(sim_array)
     
     for i in range(way):
-        #得到聚类结果第i类的 True Flase 类型的index矩阵
-        mask = (temp_pred_array == i)
-        #根据index矩阵，找出这些target中的众数，作为真实的label
-        temp_sim_array[:,mode(label_array[mask])[0].item()] = sim_array[:,i]
+        temp_sim_array[:,cluster_labels[i]] = sim_array[:,i]
 
     sim_array = temp_sim_array
     pred_array = sim_array.argmax(-1)
@@ -393,7 +420,7 @@ def train(model, train_dl, test_dl, optimizer, label_sents, save=True):
                 print(f"macroF1 doesn't improve for {early_stop_batch} batch, early stop!")
                 print(f"train use sample number: {(batch_idx - 10) * BATCH_SIZE}")
                 return
- 
+
 def get_similar_sents(sim_array, test_sents, test_labels, topk):
     way = sim_array.shape[1]
     
