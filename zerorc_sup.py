@@ -251,18 +251,10 @@ def tsne(model, dataloader, label_sents):
 
 def kmeans(model, dataloader, label_sents):
     way = len(label_sents)
-    source_pred_array = []
     embedding_array = []
     label_array = []
     model.eval()
-    target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
     with torch.no_grad():
-        # target        [batch, 1, seq_len] -> [batch, seq_len]
-        target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
-        target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
-        target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
-        target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
-
         for source, label in tqdm(dataloader):
             # source        [batch, 1, seq_len] -> [batch, seq_len]
             source_input_ids = source.get('input_ids').squeeze(1).to(DEVICE)
@@ -273,70 +265,44 @@ def kmeans(model, dataloader, label_sents):
             embedding_array.append(source_pred.cpu().numpy())
             label_array.append(np.array(label))
 
-            source_pred_array.append(source_pred)
-        
-        source_pred_array = torch.cat(source_pred_array, 0)
-        sim = F.cosine_similarity(source_pred_array.unsqueeze(1), target_pred, dim=-1)
 
         embedding_array = np.concatenate(embedding_array, 0)
         label_array = np.concatenate(label_array, 0)
 
-    # model.train()
     kmeans = KMeans(n_clusters=way)
-    results = kmeans.fit(embedding_array)
+    kmeans.fit(embedding_array)
     y_kmeans = kmeans.predict(embedding_array)
-    tsne = TSNE()
-    X_embedded = tsne.fit_transform(embedding_array)
-    palette = sns.color_palette("bright", len(np.unique(label_array)))
-    sns.scatterplot(x=X_embedded[:,0], y=X_embedded[:,1], hue=y_kmeans, legend='full', palette=palette)
-    plt.savefig(f'tsne_kmeans_{way}.png')
-    plt.close()
-
-    topk_source_preds, _ = get_similar_sents(sim.cpu().numpy(), source_pred_array, label_array, REFERENCE_NUM)
-    reference_array = []
-    for k in topk_source_preds:
-        reference_array.append(target_pred[k])
-        reference_array.extend(topk_source_preds[k])
-    reference_array = torch.stack(reference_array, 0)
-    cluster_labels = get_cluster_labels(results.cluster_centers_, reference_array.cpu().numpy())
+    # tsne = TSNE()
+    # X_embedded = tsne.fit_transform(embedding_array)
+    # palette = sns.color_palette("bright", len(np.unique(label_array)))
+    # sns.scatterplot(x=X_embedded[:,0], y=X_embedded[:,1], hue=y_kmeans, legend='full', palette=palette)
+    # plt.savefig(f'tsne_kmeans_{way}.png')
+    # plt.close()
 
     pred_array = np.zeros_like(y_kmeans)
-    cvt_label = []
     for i in range(way):
         mask = (y_kmeans == i)
-        # pred_array[mask] = mode(label_array[mask])[0]
-        pred_array[mask] = cluster_labels[i]
-        cvt_label.append(mode(label_array[mask])[0].item())
-    print('cvt_label:', cvt_label)
+        pred_array[mask] = mode(label_array[mask])[0]
 
     f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
     p = precision_score(label_array, pred_array, average='macro', zero_division=0)
     r = recall_score(label_array, pred_array, average='macro', zero_division=0)
     return None, f1, p, r
 
-def get_cluster_labels(cluster_centers, target_pred):
-    sim_array = cosine_similarity(cluster_centers, target_pred)
-    sim_array = sim_array.reshape(len(cluster_centers), -1, REFERENCE_NUM + 1).mean(-1)
-    pred_array = sim_array.argmax(-1)
+# def get_cluster_labels(cluster_centers, target_pred):
+#     sim_array = cosine_similarity(cluster_centers, target_pred)
+#     sim_array = sim_array.reshape(len(cluster_centers), -1, REFERENCE_NUM + 1).mean(-1)
+#     pred_array = sim_array.argmax(-1)
 
-    print('cluster_label:', pred_array.tolist())
-    return pred_array.tolist()
+#     return pred_array.tolist()
 
 def get_kmeans_sim(model, dataloader, label_sents):
     way = len(label_sents)
-    source_pred_array = []
     sim_array = []
     embedding_array = []
     label_array = []
     model.eval()
-    target = tokenizer(label_sents, max_length=MAXLEN, truncation=True, padding='max_length', return_tensors='pt')
     with torch.no_grad():
-        # target        [batch, 1, seq_len] -> [batch, seq_len]
-        target_input_ids = target.get('input_ids').squeeze(1).to(DEVICE)
-        target_attention_mask = target.get('attention_mask').squeeze(1).to(DEVICE)
-        target_token_type_ids = target.get('token_type_ids').squeeze(1).to(DEVICE)
-        target_pred = model(target_input_ids, target_attention_mask, target_token_type_ids)
-
         for source, label in tqdm(dataloader):
             # source        [batch, 1, seq_len] -> [batch, seq_len]
             source_input_ids = source.get('input_ids').squeeze(1).to(DEVICE)
@@ -346,11 +312,6 @@ def get_kmeans_sim(model, dataloader, label_sents):
             
             embedding_array.append(source_pred.cpu().numpy())
             label_array.append(np.array(label))
-
-            source_pred_array.append(source_pred)
-        
-        source_pred_array = torch.cat(source_pred_array, 0)
-        sim = F.cosine_similarity(source_pred_array.unsqueeze(1), target_pred, dim=-1)
 
         embedding_array = np.concatenate(embedding_array, 0)
         label_array = np.concatenate(label_array, 0)
@@ -362,18 +323,11 @@ def get_kmeans_sim(model, dataloader, label_sents):
         sim_array.append(cosine_similarity([embedding], results.cluster_centers_))
     sim_array = np.concatenate(sim_array, 0)
 
-    topk_source_preds, _ = get_similar_sents(sim.cpu().numpy(), source_pred_array, label_array, REFERENCE_NUM)
-    reference_array = []
-    for k in topk_source_preds:
-        reference_array.append(target_pred[k])
-        reference_array.extend(topk_source_preds[k])
-    reference_array = torch.stack(reference_array, 0)
-    cluster_labels = get_cluster_labels(results.cluster_centers_, reference_array.cpu().numpy())
-
+    temp_pred_array = sim_array.argmax(-1)
     temp_sim_array = np.zeros_like(sim_array)
-    
     for i in range(way):
-        temp_sim_array[:,cluster_labels[i]] = sim_array[:,i]
+        mask = (temp_pred_array == i)
+        temp_sim_array[:,mode(label_array[mask])[0].item()] = sim_array[:,i]
 
     sim_array = temp_sim_array
     pred_array = sim_array.argmax(-1)
@@ -383,7 +337,7 @@ def get_kmeans_sim(model, dataloader, label_sents):
     r = recall_score(label_array, pred_array, average='macro', zero_division=0)
     return sim_array, f1, p, r
 
-def train(model, train_dl, test_dl, optimizer, label_sents, save=True):
+def train(model, train_dl, test_dl, optimizer, label_sents):
     """模型训练函数 
     """
     model.train()
@@ -401,25 +355,25 @@ def train(model, train_dl, test_dl, optimizer, label_sents, save=True):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        # 评估
-        if batch_idx % 200 == 0 or batch_idx == len(train_dl):
-            print(f'loss: {loss.item():.4f}')
-            _, f1, p, r = eval(model, test_dl, label_sents)
-            model.train()
-            if best < f1:
-                early_stop_batch = 0
-                best = f1
-                if save:
-                    torch.save(model.state_dict(), SAVE_PATH)
-                print(f"higher macroF1: {best:.4f} in batch: {batch_idx}, save model")
-                continue
-            else:
-                print(f"macroF1: {f1:.4f} in batch: {batch_idx}")
-            early_stop_batch += 1
-            if early_stop_batch == 10:
-                print(f"macroF1 doesn't improve for {early_stop_batch} batch, early stop!")
-                print(f"train use sample number: {(batch_idx - 10) * BATCH_SIZE}")
-                return
+        # # 评估
+        # if batch_idx % 200 == 0 or batch_idx == len(train_dl):
+        #     print(f'loss: {loss.item():.4f}')
+        #     _, f1, p, r = eval(model, test_dl, label_sents)
+        #     model.train()
+        #     if best < f1:
+        #         early_stop_batch = 0
+        #         best = f1
+        #         if save:
+        #             torch.save(model.state_dict(), SAVE_PATH)
+        #         print(f"higher macroF1: {best:.4f} in batch: {batch_idx}, save model")
+        #         continue
+        #     else:
+        #         print(f"macroF1: {f1:.4f} in batch: {batch_idx}")
+        #     early_stop_batch += 1
+        #     if early_stop_batch == 10:
+        #         print(f"macroF1 doesn't improve for {early_stop_batch} batch, early stop!")
+        #         print(f"train use sample number: {(batch_idx - 10) * BATCH_SIZE}")
+        #         return
 
 def get_similar_sents(sim_array, test_sents, test_labels, topk):
     way = sim_array.shape[1]
@@ -446,25 +400,25 @@ def get_similar_sents(sim_array, test_sents, test_labels, topk):
     print(f"top {topk}", f"f1 {f1score}")
     return selected_sents, selected_labels
 
-def get_intersection(a_selected_sents, a_selected_labels, b_selected_sents, b_selected_labels):
-    selected_sents = {}
-    selected_labels = []
-    selected_preds = []
+# def get_intersection(a_selected_sents, a_selected_labels, b_selected_sents, b_selected_labels):
+#     selected_sents = {}
+#     selected_labels = []
+#     selected_preds = []
 
-    index = 0
-    for k, a_v in a_selected_sents.items():
-        selected_sents[k] = []
-        b_v = b_selected_sents[k]
-        for i, v in enumerate(a_v):
-            if (v in b_v and a_selected_labels[index+i] == b_selected_labels[index+i]) or (i < 30):
-                selected_sents[k].append(v)
-                selected_labels.append(a_selected_labels[index+i])
-                selected_preds.append(k)
-        index += len(a_selected_sents[k])
-        print('type', k, 'num', len(selected_sents[k]))
-    f1score = f1_score(selected_labels, selected_preds, average='macro', zero_division=0)
-    print(f"num {len(selected_labels)}", f"f1 {f1score}")
-    return selected_sents, selected_labels
+#     index = 0
+#     for k, a_v in a_selected_sents.items():
+#         selected_sents[k] = []
+#         b_v = b_selected_sents[k]
+#         for i, v in enumerate(a_v):
+#             if (v in b_v and a_selected_labels[index+i] == b_selected_labels[index+i]) or (i < 30):
+#                 selected_sents[k].append(v)
+#                 selected_labels.append(a_selected_labels[index+i])
+#                 selected_preds.append(k)
+#         index += len(a_selected_sents[k])
+#         print('type', k, 'num', len(selected_sents[k]))
+#     f1score = f1_score(selected_labels, selected_preds, average='macro', zero_division=0)
+#     print(f"num {len(selected_labels)}", f"f1 {f1score}")
+#     return selected_sents, selected_labels
 
 def get_pesudo_data(selected_sents, label_sents, num=50):
     pesudo_data = []
@@ -484,14 +438,14 @@ def get_pesudo_data(selected_sents, label_sents, num=50):
                 pesudo_data.append([sent1, sent_e2, snet_c2])
     return pesudo_data
 
-def fusion_similarity(a_sim, b_sim, label_array):
-    sim_array = (a_sim + b_sim) / 2
-    pred_array = sim_array.argmax(-1)
-    f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
-    p = precision_score(label_array, pred_array, average='macro', zero_division=0)
-    r = recall_score(label_array, pred_array, average='macro', zero_division=0)
+# def fusion_similarity(a_sim, b_sim, label_array):
+#     sim_array = (a_sim + b_sim) / 2
+#     pred_array = sim_array.argmax(-1)
+#     f1 = f1_score(label_array, pred_array, average='macro', zero_division=0)
+#     p = precision_score(label_array, pred_array, average='macro', zero_division=0)
+#     r = recall_score(label_array, pred_array, average='macro', zero_division=0)
 
-    return sim_array, f1, p, r
+#     return sim_array, f1, p, r
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -527,6 +481,9 @@ if __name__ == '__main__':
     test_sents, test_labels, label_sents = load_test(DATA_VAL, DATA_LABEL)
     train_dataloader = DataLoader(TrainDataset(train_data), batch_size=BATCH_SIZE)
     test_dataloader = DataLoader(TestDataset(test_sents, test_labels), batch_size=BATCH_SIZE)
+
+    SAVE_PATH = f'./saved_model/zerorc_sup_{len(label_sents)}.pt'
+
     # load model    
     assert POOLING in ['cls', 'pooler', 'last-avg', 'first-last-avg']
     model = SimcseModel(pretrained_model=model_path, pooling=POOLING)
@@ -538,7 +495,8 @@ if __name__ == '__main__':
         for epoch in range(EPOCHS):
             print(f'epoch: {epoch}')
             train(model, train_dataloader, test_dataloader, optimizer, label_sents)
-        print(f'train is finished, best model is saved at {SAVE_PATH}')
+        torch.save(model.state_dict(), SAVE_PATH)
+        print(f'train is finished, the model is saved at {SAVE_PATH}')
         _, f1, p, r  = kmeans(model, test_dataloader, label_sents)
         print(f'kmeans test_macroF1: {f1:.4f}, p: {p}, r: {r}')
     # eval
@@ -571,8 +529,8 @@ if __name__ == '__main__':
             best = 0
             for epoch in range(1):
                 print(f'epoch: {epoch}')
-                train(model, pesudo_dataloader, test_dataloader, optimizer, label_sents, False)
-            print(f'train is finished, best model is saved at {SAVE_PATH}')
+                train(model, pesudo_dataloader, test_dataloader, optimizer, label_sents)
+            print(f'train is finished.')
             pesudo_sim_array, f1, p, r = eval(model, test_dataloader, label_sents)
             print(f'test_macroF1: {f1:.4f}, p: {p}, r: {r}')
 
