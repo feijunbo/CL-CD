@@ -80,12 +80,12 @@ def fewrel_preprocess(train_src_path, train_dst_path, val_src_path, val_dst_path
                     writer.write(json.dumps({'origin': sent1, 'entailment': sent_e1, 'contradiction': snet_c1}) + '\n')
                     writer.write(json.dumps({'origin': sent1, 'entailment': sent_e2, 'contradiction': snet_c2}) + '\n')
         
-        json_keys = list(raw_test.keys())
-        for i in range(len(json_keys)):
-            for j in range(i, len(len(json_keys))):
-                sent1 = ','.join(pid2name[json_keys[i]])
-                sent_c1 = ','.join(pid2name[json_keys[j]])
-                writer.write(json.dumps({'origin': sent1, 'entailment': sent1, 'contradiction': sent_c1}) + '\n')
+        # json_keys = list(raw_test.keys())
+        # for i in range(len(json_keys)):
+        #     for j in range(i, len(json_keys)):
+        #         sent1 = ','.join(pid2name[json_keys[i]])
+        #         sent_c1 = ','.join(pid2name[json_keys[j]])
+        #         writer.write(json.dumps({'origin': sent1, 'entailment': sent1, 'contradiction': sent_c1}) + '\n')
         for key in raw_test:
             if key in raw_train:
                 print('ERROR!!!!!!!!!!!!!!!!')
