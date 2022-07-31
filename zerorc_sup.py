@@ -80,7 +80,10 @@ def load_test(path, label_path):
         index = 0
         for key in list(json_data.keys()):
             for item in json_data[key]:
-                sent = cvt_data(item['tokens'], item['h'][2][0], item['t'][2][0])
+                if isinstance(item,dict):
+                    sent = cvt_data(item['tokens'], item['h'][2][0], item['t'][2][0])
+                else:
+                    sent = item
                 sents.append(sent)
                 labels.append(index)
             index += 1
@@ -469,17 +472,22 @@ if __name__ == '__main__':
         DATA_TRAIN = './datasets/fewrel/train.txt'
         DATA_VAL = './datasets/fewrel/val.txt'
         DATA_LABEL = './datasets/fewrel/pid2name.json'
-    else:
+    elif args.dataset == 'wikizsl':
         DATA_TRAIN = './datasets/wikizsl/train.txt'
         DATA_VAL = './datasets/wikizsl/val.txt'
         DATA_LABEL = './datasets/wikizsl/pid2name.json'
+    else:
+        DATA_TRAIN = None
+        DATA_VAL = './datasets/semeval/semeval.txt'
+        DATA_LABEL = './datasets/semeval/pid2name.json'
     set_seed(args.seed)
     tokenizer = BertTokenizer.from_pretrained(model_path)
     # load data
-    train_data = load_data(DATA_TRAIN)
-    random.shuffle(train_data)
+    if DATA_TRAIN != None:
+        train_data = load_data(DATA_TRAIN)
+        random.shuffle(train_data)
+        train_dataloader = DataLoader(TrainDataset(train_data), batch_size=BATCH_SIZE)
     test_sents, test_labels, label_sents = load_test(DATA_VAL, DATA_LABEL)
-    train_dataloader = DataLoader(TrainDataset(train_data), batch_size=BATCH_SIZE)
     test_dataloader = DataLoader(TestDataset(test_sents, test_labels), batch_size=BATCH_SIZE)
 
     SAVE_PATH = f'./saved_model/zerorc_sup_{len(label_sents)}.pt'
@@ -490,7 +498,7 @@ if __name__ == '__main__':
     model.to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
     # train
-    if args.do_train:
+    if args.do_train and DATA_TRAIN != None:
         best = 0
         for epoch in range(EPOCHS):
             print(f'epoch: {epoch}')
