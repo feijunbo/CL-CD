@@ -1,9 +1,9 @@
-{"Cause-Effect": ["X is the cause of Y", "or X causes/makes/produces/emits Y"], 
-"Instrument-Agency": ["X is the instrument (tool) of Y", "or Y uses X"],
-"Product-Producer": ["X is a product of Y", "or Y produces X"],
-"Content-Container": ["X is or was (usually temporarily) stored or carried inside Y", ""],
-"Entity-Origin": ["Y is the origin of an entity X (rather than its location)", "and X is coming or derived from that origin"],
-"Entity-Destination": ["Y is the destination of X in the sense of X moving (in a physical or abstract sense) toward Y", ""],
-"Component-Whole": ["X is a component of Y", "X has a functional relation with Y. In other words, X has an operating or usable purpose within Y."],
-"Member-Collection": ["X is a member of Y", ""],
-"Message-Topic": ["X is a communicative message containing information about Y", ""]}
+{"Cause-Effect": ["Cause, Effect", "X is the cause of Y, or X causes/makes/produces/emits Y"], 
+"Instrument-Agency": ["Instrument, Agency", "X is the instrument (tool) of Y, or Y uses X"],
+"Product-Producer": ["Product, Producer", "X is a product of Y, or Y produces X"],
+"Content-Container": ["Content, Container", "X is or was (usually temporarily) stored or carried inside Y"],
+"Entity-Origin": ["Entity, Origin", "Y is the origin of an entity X (rather than its location), and X is coming or derived from that origin"],
+"Entity-Destination": ["Entity, Destination", "Y is the destination of X in the sense of X moving (in a physical or abstract sense) toward Y"],
+"Component-Whole": ["Component, Whole", "X is a component of Y, X has a functional relation with Y. In other words, X has an operating or usable purpose within Y."],
+"Member-Collection": ["Member, Collection", "X is a member of Y"],
+"Message-Topic": ["Message, Topic", "X is a communicative message containing information about Y"]}

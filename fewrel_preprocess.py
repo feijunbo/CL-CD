@@ -94,6 +94,7 @@ def fewrel_preprocess(train_src_path, train_dst_path, val_src_path, val_dst_path
 def set_seed(seed):
     np.random.seed(seed)
 
+
 # 500 1 94
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
